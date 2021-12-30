@@ -10,6 +10,7 @@ def get_data():
 		'non_standard_fieldnames': {
 			'Payment Entry': 'party',
 			'Quotation': 'party_name',
+			'Taklif': 'quotation_to',
 			'Opportunity': 'party_name',
 			'Bank Account': 'party',
 			'Subscription': 'party'
