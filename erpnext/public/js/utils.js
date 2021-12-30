@@ -106,23 +106,27 @@ $.extend(erpnext.utils, {
 		if (frm.doc.__onload && frm.doc.__onload.dashboard_info) {
 			var company_wise_info = frm.doc.__onload.dashboard_info;
 
-			console.log(company_wise_info);
 			if (company_wise_info.length > 1) {
 				company_wise_info.forEach(function (info) {
 					erpnext.utils.add_indicator_for_multicompany(frm, info);
 				});
 			} else if (company_wise_info.length === 1) {
-				frm.dashboard.add_indicator(__('Annual Billing: {0}',
-					[format_currency(company_wise_info[0].billing_this_year, company_wise_info[0].currency)]), 'blue');
+				frappe.call({
+					"method": "datnes_bilisim.events.customer.get_invoices_amounts",
+					"args": {
+						"customer": frm.doc.name,
+					},
+					async: false,
+					callback(res) {
+						const data = res.message;
+						for (const row in data) {
+							frm.dashboard.add_indicator(__('Annual Billing: {0}', [format_currency(data[row].billing, row)]), 'blue');
+							frm.dashboard.add_indicator(__('Total Unpaid: {0}', [format_currency(data[row].unpaid, row)]), data[row].unpaid ? 'orange' : 'green');
+						}
+					}
+				})
 
-				frm.dashboard.add_indicator(__('Total Unpaid: {0}',
-					[format_currency(company_wise_info[0].total_unpaid, company_wise_info[0].currency)]),
-					company_wise_info[0].total_unpaid ? 'orange' : 'green');
-
-				frm.dashboard.add_indicator(__('Annual Billing: {0}', [format_currency(203, '$')]), 'blue');
-
-				frm.dashboard.add_indicator(__('Total Unpaid: {0}',
-					[format_currency(203, '$')]), 'orange');
+			]
 
 				if (company_wise_info[0].loyalty_points) {
 					frm.dashboard.add_indicator(__('Loyalty Points: {0}',
