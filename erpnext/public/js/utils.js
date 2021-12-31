@@ -111,6 +111,7 @@ $.extend(erpnext.utils, {
 					erpnext.utils.add_indicator_for_multicompany(frm, info);
 				});
 			} else if (company_wise_info.length === 1) {
+
 				frappe.call({
 					"method": "datnes_bilisim.events.customer.get_invoices_amounts",
 					"args": {
@@ -119,14 +120,13 @@ $.extend(erpnext.utils, {
 					async: false,
 					callback(res) {
 						const data = res.message;
+						console.log(data);
 						for (const row in data) {
 							frm.dashboard.add_indicator(__('Annual Billing: {0}', [format_currency(data[row].billing, row)]), 'blue');
 							frm.dashboard.add_indicator(__('Total Unpaid: {0}', [format_currency(data[row].unpaid, row)]), data[row].unpaid ? 'orange' : 'green');
 						}
 					}
 				})
-
-			]
 
 				if (company_wise_info[0].loyalty_points) {
 					frm.dashboard.add_indicator(__('Loyalty Points: {0}',
