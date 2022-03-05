@@ -344,6 +344,7 @@ def get_basic_details(args, item, overwrite_warehouse=True):
 
 	args.conversion_factor = out.conversion_factor
 	out.stock_qty = out.qty * out.conversion_factor
+	args.stock_qty = out.stock_qty
 
 	# calculate last purchase rate
 	if args.get('doctype') in purchase_doctypes:
@@ -1098,7 +1099,7 @@ def apply_price_list(args, as_doc=False):
 		}
 
 def apply_price_list_on_item(args):
-	item_doc = frappe.get_doc("Item", args.item_code)
+	item_doc = frappe.db.get_value("Item", args.item_code, ['name', 'variant_of'], as_dict=1)
 	item_details = get_price_list_rate(args, item_doc)
 
 	item_details.update(get_pricing_rule_for_item(args, item_details.price_list_rate))
