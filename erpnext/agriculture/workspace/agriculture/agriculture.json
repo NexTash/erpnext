@@ -10,6 +10,7 @@
  "hide_custom": 0,
  "icon": "agriculture",
  "idx": 0,
+ "is_default": 0,
  "is_standard": 1,
  "label": "Agriculture",
  "links": [
@@ -143,9 +144,18 @@
    "link_type": "DocType",
    "onboard": 1,
    "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Pest",
+   "link_to": "Pest",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
   }
  ],
- "modified": "2020-12-01 13:38:38.477493",
+ "modified": "2022-04-24 18:00:19.641684",
  "modified_by": "Administrator",
  "module": "Agriculture",
  "name": "Agriculture",
