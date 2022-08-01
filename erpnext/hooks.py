@@ -9,7 +9,7 @@ app_color = "#e74c3c"
 app_email = "info@erpnext.com"
 app_license = "GNU General Public License (v3)"
 source_link = "https://github.com/frappe/erpnext"
-app_logo_url = "/assets/erpnext/images/erpnext-logo.svg"
+app_logo_url = "/assets/medkit/images/medkit.png"
 
 
 develop_version = "13.x.x-develop"
@@ -103,8 +103,8 @@ website_generators = [
 ]
 
 website_context = {
-	"favicon": "/assets/erpnext/images/erpnext-favicon.svg",
-	"splash_image": "/assets/erpnext/images/erpnext-logo.svg",
+	"favicon": "/assets/medkit/images/medkit.png",
+	"splash_image": "/assets/medkit/images/medkit.png",
 }
 
 website_route_rules = [
