@@ -1,18 +1,86 @@
-<div class="my-5">
-	<h3>{{ doc.job_title }}</h3>
-	<p>{{ doc.description }}</p>
-	{%- if doc.publish_salary_range -%}
-	<p><b>{{_("Salary range per month")}}: </b>{{ frappe.format_value(frappe.utils.flt(doc.lower_range), currency=doc.currency) }} - {{ frappe.format_value(frappe.utils.flt(doc.upper_range), currency=doc.currency) }}</p>
-	{% endif %}
-	<div>
-		{%- if doc.job_application_route -%}
-		<a class='btn btn-primary'
-		href='/{{doc.job_application_route}}?new=1&job_title={{ doc.name }}'>
-		{{ _("Apply Now") }}</a>
-		{% else %}
-		<a class='btn btn-primary'
-		href='/job_application?new=1&job_title={{ doc.name }}'>
-		{{ _("Apply Now") }}</a>
-		{% endif %}
-	</div>
-</div>
+
+  <div class="collapsible-item">
+    <a
+      aria-controls="id-{{ doc.name }}"
+      aria-expanded="false"
+      class="collapsible-title collapsed"
+      data-toggle="collapse"
+      href="#id-{{ doc.name }}"
+      role="button"
+    >
+      <h3>{{ doc.job_title }}</h3>
+      <svg
+        class="collapsible-icon"
+        height="24"
+        viewBox="0 0 16 16"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          class="vertical"
+          d="M8 4V12"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-miterlimit="10"
+          stroke-width="1.5"
+        ></path>
+        <path
+          class="horizontal"
+          d="M4 8H12"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-miterlimit="10"
+          stroke-width="1.5"
+        ></path>
+      </svg>
+    </a>
+
+    <div
+      class="collapsible-content from-markdown collapse"
+      id="id-{{ doc.name }}"
+    >
+      <div class="my-5">
+        <p>{{ doc.description }}</p>
+        {%- if doc.publish_salary_range -%}
+        <p>
+          <b>{{_("Salary range per month")}}: </b>{{
+          frappe.format_value(frappe.utils.flt(doc.lower_range),
+          currency=doc.currency) }} - {{
+          frappe.format_value(frappe.utils.flt(doc.upper_range),
+          currency=doc.currency) }}
+        </p>
+        {% endif %}
+        <div style="margin-top: 30px">
+          {%- if doc.job_application_route -%}
+          <a
+            class="hero-btn"
+            href="/{{doc.job_application_route}}?new=1&job_title={{ doc.name }}"
+          >
+            {{ _("Apply Now") }}</a
+          >
+          {% else %}
+          <a
+            class="hero-btn"
+            href="/job_application?new=1&job_title={{ doc.name }}"
+          >
+            {{ _("Apply Now") }}</a
+          >
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+<style>
+  .hero-btn {
+    margin: 30px 0;
+    background-color: #000;
+    color: #fff;
+    border: 1px solid #000;
+    padding: 15px 55px;
+    border-radius: 10px;
+    transition: 0.3s;
+  }
+</style>
