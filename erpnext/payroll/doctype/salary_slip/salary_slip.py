@@ -1,7 +1,6 @@
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # License: GNU General Public License v3. See license.txt
 
-
 import datetime
 import math
 
@@ -316,6 +315,8 @@ class SalarySlip(TransactionBase):
 		)
 
 		working_days = date_diff(self.end_date, self.start_date) + 1
+		working_days_list = [add_days(self.start_date, i) for i in range(working_days)]
+
 		if for_preview:
 			self.total_working_days = working_days
 			self.payment_days = working_days
@@ -323,8 +324,12 @@ class SalarySlip(TransactionBase):
 
 		holidays = self.get_holidays_for_employee(self.start_date, self.end_date)
 
+		joining_date, relieving_date = self.get_joining_and_relieving_dates()
+
 		if not cint(include_holidays_in_total_working_days):
 			working_days -= len(holidays)
+			working_days_list = [cstr(day) for day in working_days_list if cstr(day) not in holidays]
+
 			if working_days < 0:
 				frappe.throw(_("There are more holidays than working days this month."))
 
@@ -332,10 +337,14 @@ class SalarySlip(TransactionBase):
 			frappe.throw(_("Please set Payroll based on in Payroll settings"))
 
 		if payroll_based_on == "Attendance":
-			actual_lwp, absent = self.calculate_lwp_ppl_and_absent_days_based_on_attendance(holidays)
+			actual_lwp, absent = self.calculate_lwp_ppl_and_absent_days_based_on_attendance(
+				holidays, relieving_date
+			)
 			self.absent_days = absent
 		else:
-			actual_lwp = self.calculate_lwp_or_ppl_based_on_leave_application(holidays, working_days)
+			actual_lwp = self.calculate_lwp_or_ppl_based_on_leave_application(
+				holidays, working_days_list, relieving_date
+			)
 
 		if not lwp:
 			lwp = actual_lwp
@@ -458,16 +467,21 @@ class SalarySlip(TransactionBase):
 	def get_holidays_for_employee(self, start_date, end_date):
 		return get_holiday_dates_for_employee(self.employee, start_date, end_date)
 
-	def calculate_lwp_or_ppl_based_on_leave_application(self, holidays, working_days):
+	def calculate_lwp_or_ppl_based_on_leave_application(
+		self, holidays, working_days_list, relieving_date=None
+	):
+
 		lwp = 0
-		holidays = "','".join(holidays)
+
 		daily_wages_fraction_for_half_day = (
 			flt(frappe.db.get_value("Payroll Settings", None, "daily_wages_fraction_for_half_day")) or 0.5
 		)
 
-		for d in range(working_days):
-			date = add_days(cstr(getdate(self.start_date)), d)
-			leave = get_lwp_or_ppl_for_date(date, self.employee, holidays)
+		for d in working_days_list:
+			if relieving_date and getdate(d) > getdate(relieving_date):
+				break
+
+			leave = get_lwp_or_ppl_for_date(d, self.employee, holidays)
 
 			if leave:
 				equivalent_lwp_count = 0
@@ -486,9 +500,14 @@ class SalarySlip(TransactionBase):
 
 		return lwp
 
-	def calculate_lwp_ppl_and_absent_days_based_on_attendance(self, holidays):
+	def calculate_lwp_ppl_and_absent_days_based_on_attendance(self, holidays, relieving_date=None):
 		lwp = 0
 		absent = 0
+
+		end_date = self.end_date
+
+		if relieving_date:
+			end_date = relieving_date
 
 		daily_wages_fraction_for_half_day = (
 			flt(frappe.db.get_value("Payroll Settings", None, "daily_wages_fraction_for_half_day")) or 0.5
@@ -504,7 +523,7 @@ class SalarySlip(TransactionBase):
 		for leave_type in leave_types:
 			leave_type_map[leave_type.name] = leave_type
 
-		attendances = frappe.db.sql(
+		attendances = frappe.db.sql(  # nosemgrep
 			"""
 			SELECT attendance_date, status, leave_type
 			FROM `tabAttendance`
@@ -514,7 +533,7 @@ class SalarySlip(TransactionBase):
 				AND docstatus = 1
 				AND attendance_date between %s and %s
 		""",
-			values=(self.employee, self.start_date, self.end_date),
+			values=(self.employee, self.start_date, end_date),
 			as_dict=1,
 		)
 
@@ -587,7 +606,7 @@ class SalarySlip(TransactionBase):
 		if self.salary_structure:
 			self.calculate_component_amounts("deductions")
 
-		self.set_loan_repayment()
+		self.add_applicable_loans()
 		self.set_precision_for_component_amounts()
 		self.set_net_pay()
 
@@ -632,9 +651,19 @@ class SalarySlip(TransactionBase):
 				continue
 
 			amount = self.eval_condition_and_formula(struct_row, data)
-			if (
-				amount or (struct_row.amount_based_on_formula and amount is not None)
-			) and struct_row.statistical_component == 0:
+
+			if struct_row.statistical_component:
+				# update statitical component amount in reference data based on payment days
+				# since row for statistical component is not added to salary slip
+				if struct_row.depends_on_payment_days:
+					joining_date, relieving_date = self.get_joining_and_relieving_dates()
+					default_data[struct_row.abbr] = amount
+					data[struct_row.abbr] = flt(
+						(flt(amount) * flt(self.payment_days) / cint(self.total_working_days)),
+						struct_row.precision("amount"),
+					)
+
+			elif amount or struct_row.amount_based_on_formula and amount is not None:
 				default_amount = self.eval_condition_and_formula(struct_row, default_data)
 				self.update_component_row(
 					struct_row, amount, component_type, data=data, default_amount=default_amount
@@ -687,8 +716,8 @@ class SalarySlip(TransactionBase):
 
 		for key in ("earnings", "deductions"):
 			for d in self.get(key):
-				default_data[d.abbr] = d.default_amount
-				data[d.abbr] = d.amount
+				default_data[d.abbr] = d.default_amount or 0
+				data[d.abbr] = d.amount or 0
 
 		return data, default_data
 
@@ -1053,7 +1082,25 @@ class SalarySlip(TransactionBase):
 			)
 			exempted_amount = flt(exempted_amount[0][0]) if exempted_amount else 0
 
-		return taxable_earnings - exempted_amount
+		opening_taxable_earning = self.get_opening_balance_for(
+			"taxable_earnings_till_date", start_date, end_date
+		)
+
+		return (taxable_earnings + opening_taxable_earning) - exempted_amount
+
+	def get_opening_balance_for(self, field_to_select, start_date, end_date):
+		opening_balance = frappe.db.get_all(
+			"Salary Structure Assignment",
+			{
+				"employee": self.employee,
+				"salary_structure": self.salary_structure,
+				"from_date": ["between", (start_date, end_date)],
+				"docstatus": 1,
+			},
+			field_to_select,
+		)
+
+		return opening_balance[0].get(field_to_select) if opening_balance else 0.0
 
 	def get_tax_paid_in_period(self, start_date, end_date, tax_component):
 		# find total_tax_paid, tax paid for benefit, additional_salary
@@ -1082,7 +1129,11 @@ class SalarySlip(TransactionBase):
 			)[0][0]
 		)
 
-		return total_tax_paid
+		tax_deducted_till_date = self.get_opening_balance_for(
+			"tax_deducted_till_date", start_date, end_date
+		)
+
+		return total_tax_paid + tax_deducted_till_date
 
 	def get_taxable_earnings(
 		self, allow_tax_exemption=False, based_on_payment_days=0, payroll_period=None
@@ -1370,44 +1421,47 @@ class SalarySlip(TransactionBase):
 
 		return joining_date, relieving_date
 
-	def set_loan_repayment(self):
+	def add_applicable_loans(self):
 		self.total_loan_repayment = 0
 		self.total_interest_amount = 0
 		self.total_principal_amount = 0
 
-		self.set("loans", [])
+		loans = [d.loan for d in self.get("loans")]
+
 		for loan in self.get_loan_details():
-			amounts = calculate_amounts(loan.name, self.posting_date, "Regular Payment")
+			if loan.name not in loans:
+				amounts = calculate_amounts(loan.name, self.posting_date, "Regular Payment")
+				if (
+					amounts["interest_amount"] + amounts["payable_principal_amount"]
+					> amounts["written_off_amount"]
+				):
+					if amounts["interest_amount"] > amounts["written_off_amount"]:
+						amounts["interest_amount"] -= amounts["written_off_amount"]
+						amounts["written_off_amount"] = 0
+					else:
+						amounts["written_off_amount"] -= amounts["interest_amount"]
+						amounts["interest_amount"] = 0
 
-			if (amounts["interest_amount"] or amounts["payable_principal_amount"]) and (
-				amounts["payable_principal_amount"] + amounts["interest_amount"]
-				> amounts["written_off_amount"]
-			):
+					if amounts["payable_principal_amount"] > amounts["written_off_amount"]:
+						amounts["payable_principal_amount"] -= amounts["written_off_amount"]
+						amounts["written_off_amount"] = 0
+					else:
+						amounts["written_off_amount"] -= amounts["payable_principal_amount"]
+						amounts["payable_principal_amount"] = 0
 
-				if amounts["interest_amount"] > amounts["written_off_amount"]:
-					amounts["interest_amount"] -= amounts["written_off_amount"]
-					amounts["written_off_amount"] = 0
-				else:
-					amounts["written_off_amount"] -= amounts["interest_amount"]
-					amounts["interest_amount"] = 0
-
-				if amounts["payable_principal_amount"] > amounts["written_off_amount"]:
-					amounts["payable_principal_amount"] -= amounts["written_off_amount"]
-					amounts["written_off_amount"] = 0
-				else:
-					amounts["written_off_amount"] -= amounts["payable_principal_amount"]
-					amounts["payable_principal_amount"] = 0
-
-				self.append(
-					"loans",
-					{
-						"loan": loan.name,
-						"interest_amount": amounts["interest_amount"],
-						"principal_amount": amounts["payable_principal_amount"],
-						"loan_account": loan.loan_account,
-						"interest_income_account": loan.interest_income_account,
-					},
-				)
+					self.append(
+						"loans",
+						{
+							"loan": loan.name,
+							"interest_amount": amounts["interest_amount"],
+							"principal_amount": amounts["payable_principal_amount"],
+							"total_payment": amounts["interest_amount"] + amounts["payable_principal_amount"]
+							if not loan.manually_update_paid_amount_in_salary_slip
+							else 0,
+							"loan_account": loan.loan_account,
+							"interest_income_account": loan.interest_income_account,
+						},
+					)
 
 		for payment in self.get("loans"):
 			amounts = calculate_amounts(payment.loan, self.posting_date, "Regular Payment")
@@ -1432,7 +1486,14 @@ class SalarySlip(TransactionBase):
 	def get_loan_details(self):
 		loan_details = frappe.get_all(
 			"Loan",
-			fields=["name", "interest_income_account", "loan_account", "loan_type", "is_term_loan"],
+			fields=[
+				"name",
+				"interest_income_account",
+				"loan_account",
+				"loan_type",
+				"is_term_loan",
+				"manually_update_paid_amount_in_salary_slip",
+			],
 			filters={
 				"applicant": self.employee,
 				"docstatus": 1,

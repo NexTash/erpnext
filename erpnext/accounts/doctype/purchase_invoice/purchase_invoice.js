@@ -31,7 +31,7 @@ erpnext.accounts.PurchaseInvoice = erpnext.buying.BuyingController.extend({
 		this._super();
 
 		// Ignore linked advances
-		this.frm.ignore_doctypes_on_cancel_all = ['Journal Entry', 'Payment Entry'];
+		this.frm.ignore_doctypes_on_cancel_all = ['Journal Entry', 'Payment Entry', 'Purchase Invoice'];
 
 		if(!this.frm.doc.__islocal) {
 			// show credit_to in print format
@@ -81,8 +81,12 @@ erpnext.accounts.PurchaseInvoice = erpnext.buying.BuyingController.extend({
 		}
 
 		if(doc.docstatus == 1 && doc.outstanding_amount != 0
-			&& !(doc.is_return && doc.return_against)) {
-			this.frm.add_custom_button(__('Payment'), this.make_payment_entry, __('Create'));
+			&& !(doc.is_return && doc.return_against) && !doc.on_hold) {
+			this.frm.add_custom_button(
+				__('Payment'),
+				() => this.make_payment_entry(),
+				__('Create')
+			);
 			cur_frm.page.set_inner_btn_group_as_primary(__('Create'));
 		}
 
@@ -569,6 +573,10 @@ frappe.ui.form.on("Purchase Invoice", {
 		erpnext.queries.setup_queries(frm, "Warehouse", function() {
 			return erpnext.queries.warehouse(frm.doc);
 		});
+
+		if (frm.is_new()) {
+			frm.clear_table("tax_withheld_vouchers");
+		}
 	},
 
 	is_subcontracted: function(frm) {

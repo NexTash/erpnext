@@ -651,7 +651,6 @@
    "hide_days": 1,
    "hide_seconds": 1,
    "label": "Ignore Pricing Rule",
-   "no_copy": 1,
    "print_hide": 1
   },
   {
@@ -1791,6 +1790,8 @@
    "width": "50%"
   },
   {
+   "fetch_from": "sales_partner.commission_rate",
+   "fetch_if_empty": 1,
    "fieldname": "commission_rate",
    "fieldtype": "Float",
    "hide_days": 1,
@@ -2046,7 +2047,7 @@
    "link_fieldname": "consolidated_invoice"
   }
  ],
- "modified": "2022-07-11 17:43:56.435382",
+ "modified": "2023-01-28 19:45:47.538163",
  "modified_by": "Administrator",
  "module": "Accounts",
  "name": "Sales Invoice",

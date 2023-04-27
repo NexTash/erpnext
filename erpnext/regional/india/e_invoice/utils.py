@@ -71,7 +71,11 @@ def validate_eligibility(doc):
 
 	# if export invoice, then taxes can be empty
 	# invoice can only be ineligible if no taxes applied and is not an export invoice
-	no_taxes_applied = not doc.get("taxes") and not doc.get("gst_category") == "Overseas"
+	no_taxes_applied = (
+		not doc.get("taxes")
+		and not doc.get("gst_category") == "Overseas"
+		and not doc.get("gst_category") == "SEZ"
+	)
 	has_non_gst_item = any(d for d in doc.get("items", []) if d.get("is_non_gst"))
 
 	if (
@@ -894,6 +898,7 @@ class GSPConnector:
 		return self.e_invoice_settings.auth_token
 
 	def make_request(self, request_type, url, headers=None, data=None):
+		res = None
 		try:
 			if request_type == "post":
 				res = make_post_request(url, headers=headers, data=data)

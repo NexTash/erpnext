@@ -145,7 +145,7 @@ class WorkOrder(Document):
 			frappe.throw(_("Sales Order {0} is {1}").format(self.sales_order, status))
 
 	def set_default_warehouse(self):
-		if not self.wip_warehouse:
+		if not self.wip_warehouse and not self.skip_transfer:
 			self.wip_warehouse = frappe.db.get_single_value(
 				"Manufacturing Settings", "default_wip_warehouse"
 			)
@@ -690,7 +690,7 @@ class WorkOrder(Document):
 
 			for node in bom_traversal:
 				if node.is_bom:
-					operations.extend(_get_operations(node.name, qty=node.exploded_qty))
+					operations.extend(_get_operations(node.name, qty=node.exploded_qty / node.bom_qty))
 
 		bom_qty = frappe.get_cached_value("BOM", self.bom_no, "quantity")
 		operations.extend(_get_operations(self.bom_no, qty=1.0 / bom_qty))

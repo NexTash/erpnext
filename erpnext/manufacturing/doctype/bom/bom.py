@@ -31,7 +31,7 @@ class BOMTree:
 
 	# specifying the attributes to save resources
 	# ref: https://docs.python.org/3/reference/datamodel.html#slots
-	__slots__ = ["name", "child_items", "is_bom", "item_code", "exploded_qty", "qty"]
+	__slots__ = ["name", "child_items", "is_bom", "item_code", "qty", "exploded_qty", "bom_qty"]
 
 	def __init__(
 		self, name: str, is_bom: bool = True, exploded_qty: float = 1.0, qty: float = 1
@@ -50,9 +50,10 @@ class BOMTree:
 	def __create_tree(self):
 		bom = frappe.get_cached_doc("BOM", self.name)
 		self.item_code = bom.item
+		self.bom_qty = bom.quantity
 
 		for item in bom.get("items", []):
-			qty = item.qty / bom.quantity  # quantity per unit
+			qty = item.stock_qty / bom.quantity  # quantity per unit
 			exploded_qty = self.exploded_qty * qty
 			if item.bom_no:
 				child = BOMTree(item.bom_no, exploded_qty=exploded_qty, qty=qty)
@@ -384,6 +385,7 @@ class BOM(WebsiteGenerator):
 		if self.docstatus == 2:
 			return
 
+		self.flags.cost_updated = False
 		existing_bom_cost = self.total_cost
 
 		if self.docstatus == 1:
@@ -406,7 +408,11 @@ class BOM(WebsiteGenerator):
 				frappe.get_doc("BOM", bom).update_cost(from_child_bom=True)
 
 		if not from_child_bom:
-			frappe.msgprint(_("Cost Updated"), alert=True)
+			msg = "Cost Updated"
+			if not self.flags.cost_updated:
+				msg = "No changes in cost found"
+
+			frappe.msgprint(_(msg), alert=True)
 
 	def update_parent_cost(self):
 		if self.total_cost:
@@ -592,10 +598,15 @@ class BOM(WebsiteGenerator):
 			# not via doc event, table is not regenerated and needs updation
 			self.calculate_exploded_cost()
 
+		old_cost = self.total_cost
+
 		self.total_cost = self.operating_cost + self.raw_material_cost - self.scrap_material_cost
 		self.base_total_cost = (
 			self.base_operating_cost + self.base_raw_material_cost - self.base_scrap_material_cost
 		)
+
+		if self.total_cost != old_cost:
+			self.flags.cost_updated = True
 
 	def calculate_op_cost(self, update_hour_rate=False):
 		"""Update workstation rate and calculates totals"""
@@ -938,7 +949,8 @@ def get_valuation_rate(data):
 	2) If no value, get last valuation rate from SLE
 	3) If no value, get valuation rate from Item
 	"""
-	from frappe.query_builder.functions import Sum
+	from frappe.query_builder.functions import Count, IfNull, Sum
+	from pypika import Case
 
 	item_code, company = data.get("item_code"), data.get("company")
 	valuation_rate = 0.0
@@ -949,7 +961,14 @@ def get_valuation_rate(data):
 		frappe.qb.from_(bin_table)
 		.join(wh_table)
 		.on(bin_table.warehouse == wh_table.name)
-		.select((Sum(bin_table.stock_value) / Sum(bin_table.actual_qty)).as_("valuation_rate"))
+		.select(
+			Case()
+			.when(
+				Count(bin_table.name) > 0, IfNull(Sum(bin_table.stock_value) / Sum(bin_table.actual_qty), 0.0)
+			)
+			.else_(None)
+			.as_("valuation_rate")
+		)
 		.where((bin_table.item_code == item_code) & (wh_table.company == company))
 	).run(as_dict=True)[0]
 
